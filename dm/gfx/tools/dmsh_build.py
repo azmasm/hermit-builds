@@ -1775,16 +1775,50 @@ def xlate_errors(r):
     for ln in r.stderr.splitlines():
         m = re.match(r'\[RED\] (\w+): (.*)', ln)
         if m: xerr[m.group(1)] = m.group(2)[:160]
+# Translation cache (switch2mac, local): what the translator wrote for a shader (<key>.spv, <key>.res.json, <key>.reader.spv) is kept under a digest of the translator's
+# own files and the shader's whole job (its code, facts, stage memory, options), so a change that leaves the translation alone (a rule in this file applied after it, such as
+# hmma_msl) translates nothing again: only the steps after it run. The translator is deterministic for one job, so reuse gives the same files. DMSH_XL_CACHE=0 turns it off
+XL_CACHE = os.environ.get('DMSH_XL_CACHE') != '0'
+XL_FILES = ('.spv', '.res.json', '.reader.spv')
+def _xl_fp():
+    h = hashlib.sha256(b'dmsh_xlcache 1\0')
+    d = os.path.dirname(os.path.realpath(XLATE))
+    for n in sorted(os.listdir(d)):
+        p = os.path.join(d, n)
+        if os.path.isfile(p): h.update(n.encode() + b'\0'); h.update(hashlib.sha256(open(p, 'rb').read()).digest())
+    return h.digest()
+XL_FP = _xl_fp() if XL_CACHE else b''
+XL_STATS = collections.Counter()
+def xl_digest(j):
+    jj = dict(j); code = open(jj.pop('code'), 'rb').read()
+    return hashlib.sha256(XL_FP + json.dumps(jj, sort_keys=True).encode() + b'\0' + code).hexdigest()
 def translate(batch):
     """A batch's misses translated into a working folder of its own (removed once the batch is finished) → that folder"""
     wb = tempfile.mkdtemp(prefix='batch_', dir=w)
     miss = [k for k in batch if k not in cache_hits]
     for k in miss: jobs[k], c1s[k] = job_for(k, loc[k][0], rec_of(k)[1], wb)
+    run, dg = miss, {}
+    if XL_CACHE:
+        run = []
+        for k in miss:
+            dg[k] = xl_digest(jobs[k]); root = f'xl1/{dg[k]}'
+            if STORE.to_file(f'{root}/.spv', os.path.join(wb, k + '.spv')):   # pruned meanwhile: False, and it is translated
+                for ext in XL_FILES[1:]: STORE.to_file(f'{root}/{ext}', os.path.join(wb, k + ext))
+                XL_STATS['reused'] += 1
+            else: run.append(k)
     def xl(ch):
         jp = os.path.join(wb, f'job_{abs(hash(ch[0]))}.json'); json.dump([jobs[k] for k in ch], open(jp, 'w'))
         return subprocess.run([XLATE, jp, wb], capture_output=True, text=True)
     with cf.ThreadPoolExecutor(NJ) as ex:
-        for r in ex.map(xl, [c for c in (miss[i::NJ] for i in range(NJ)) if c]): xlate_errors(r)
+        for r in ex.map(xl, [c for c in (run[i::NJ] for i in range(NJ)) if c]): xlate_errors(r)
+    if XL_CACHE:
+        with STORE.batch():
+            for k in run:
+                if k in xerr or not os.path.exists(os.path.join(wb, k + '.spv')): continue
+                for ext in XL_FILES:
+                    p = os.path.join(wb, k + ext)
+                    if os.path.exists(p): STORE.put(f'xl1/{dg[k]}/{ext}', open(p, 'rb').read())
+                XL_STATS['translated'] += 1
     return wb
 def restored(key, wb):
     """A cache hit's outputs back on disk while it is finished. When another build pruned them since the look (cache_lookup), the shader is translated now, in the batch's folder: False"""
@@ -1853,6 +1887,7 @@ shutil.rmtree(w, ignore_errors=True)
 st = collections.Counter(r[1] for r in res)
 print(f'shaders {len(res)}: ok {st["ok"]}, ' + ', '.join(f'{k} {v}' for k, v in st.items() if k != 'ok'))
 print(f'shader cache: hit {PRE_STATS["hit"]}, rebuilt {PRE_STATS["miss"]}')
+if XL_CACHE: print(f'translation cache: reused {XL_STATS["reused"]}, translated {XL_STATS["translated"]}')
 for reason in ('new key', 'rule changed', 'code fingerprint changed: all rebuilt'):
     if PRE_STATS[reason]: print(f'  {reason} {PRE_STATS[reason]}')
 print(f'readable-tile versions (<key>_bf, dmsh_fetch.py): {BF_STATS["generated"]} generated, {BF_STATS["failed"]} failed to compile')
