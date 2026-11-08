@@ -407,7 +407,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
                     operation.GlobalVectorWord == 0 &&
                     TryGetRawVectorFunction(gtsContext, resourceManager, gpuAccessor, operation, out int vectorFunctionId))
                 {
-                    return GenerateRawVectorLoad(resourceManager, node, operation, vectorFunctionId);
+                    return GenerateRawVectorLoad(resourceManager, node, operation, vectorFunctionId, site);
                 }
 
                 return GenerateCallStorageOp(node, operation, null, functionId, site);
@@ -417,12 +417,12 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
         // nxnative: the first word of a 64- or 128-bit global load whose address goes through the pool table (Operation.GlobalVectorCount) calls the vector helper, which leaves
         // the other words in the shader's gmem_vec local memory; the loads of those words, which follow in the block, read them from there right after the call. A word whose
         // load is gone (unused) is not read. The scan stops at any other memory access or call, so nothing writes gmem_vec in between
-        private static LinkedListNode<INode> GenerateRawVectorLoad(ResourceManager resourceManager, LinkedListNode<INode> node, Operation operation, int functionId)
+        private static LinkedListNode<INode> GenerateRawVectorLoad(ResourceManager resourceManager, LinkedListNode<INode> node, Operation operation, int functionId, Operand site)
         {
             int count = operation.GlobalVectorCount;
             int vectorMemoryId = resourceManager.GetRawVectorMemory();
 
-            node = GenerateCallStorageOp(node, operation, null, functionId);   // the first word's load, now a copy of the call's result
+            node = GenerateCallStorageOp(node, operation, null, functionId, site ?? Const(-1));   // the first word's load, now a copy of the call's result; (oot-mac6) with #1663's pointer site (-1: none), which the helper takes
 
             LinkedListNode<INode> insertAfter = node;
 
