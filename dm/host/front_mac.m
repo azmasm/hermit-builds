@@ -347,11 +347,13 @@ static NSUserDefaults *settings_store(void) {
 }
 static NSColor *ui_accent(void) { return [NSColor colorWithCalibratedRed:80/255.0 green:1 blue:120/255.0 alpha:1]; }
 @interface DmPanelRow : NSObject
-@property(copy) NSDictionary *s; @property(strong) NSTextField *note;
+@property(copy) NSDictionary *s; @property(strong) NSTextField *note; @property BOOL locked;
 @end
 @implementation DmPanelRow @end
 @interface DmPanel : NSView
 @property(strong) NSMutableArray<DmPanelRow *> *rows;
+@property(strong) NSMutableArray<NSView *> *advanced;   // (switch2mac) the engine's tuning rows, behind "Advanced"
+@property(strong) NSStackView *stack; @property(strong) NSView *doc; @property(strong) NSButton *more;
 @end
 static DmPanel *g_panel;
 static void overlay_set(int mode);
@@ -359,8 +361,24 @@ static void overlay_set(int mode);
 static NSTextField *panel_label(NSString *t, CGFloat size, NSFontWeight w, NSColor *c) {
     NSTextField *l = [NSTextField wrappingLabelWithString:t]; l.font = [NSFont systemFontOfSize:size weight:w]; l.textColor = c; l.drawsBackground = NO; return l;
 }
-static NSString *setting_value(NSDictionary *s) {
-    const char *e = getenv([s[@"env"] UTF8String]); return e ? @(e) : s[@"default"];
+static NSMutableDictionary<NSString *, NSString *> *g_chosen;   // (switch2mac) choices made in the panel this session: the panel shows them when it opens again
+static NSString *setting_value(NSDictionary *s) {   // what the panel shows: this session's choice, else the saved choice, else the value the game started with, else the default
+    NSString *env = s[@"env"], *v = g_chosen[env] ?: [settings_store() stringForKey:[@"launcher." stringByAppendingString:env]];
+    if (v) return v;
+    const char *e = getenv(env.UTF8String); return e ? @(e) : s[@"default"];
+}
+static NSMutableSet<NSString *> *g_locked;   // (switch2mac) settings the launch environment or an env file fixed for this run (filled at attach)
+static NSString *setting_running(NSDictionary *s) { const char *e = getenv([s[@"env"] UTF8String]); return e ? @(e) : s[@"default"]; }   // the value this run uses
+static void settings_lock_scan(void) {
+    // A variable set at start but not to the saved choice came from the launch environment or an env file: the launcher keeps those, so the panel cannot change it
+    g_locked = [NSMutableSet set];
+    const char *fd = getenv("DM_FONT_DIR");
+    NSData *d = fd ? [NSData dataWithContentsOfFile:[[@(fd) stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"launcher.json"]] : nil;
+    for (NSDictionary *s in d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil][@"settings"] : @[]) {
+        const char *e = getenv([s[@"env"] UTF8String]); if (!e) continue;
+        NSString *saved = [settings_store() stringForKey:[@"launcher." stringByAppendingString:s[@"env"]]];
+        if (saved ? ![saved isEqual:@(e)] : ![@(e) isEqual:s[@"default"]]) [g_locked addObject:s[@"env"]];
+    }
 }
 - (instancetype)initWithFrame:(NSRect)r {
     if (!(self = [super initWithFrame:r])) return nil;
@@ -376,11 +394,21 @@ static NSString *setting_value(NSDictionary *s) {
     NSTextField *title = panel_label(@"Settings", 20, NSFontWeightBold, NSColor.whiteColor);
     NSTextField *sub = panel_label(@"2 or Esc closes · the overlay and display mode change at once, the rest at the next launch", 11, NSFontWeightMedium, ui_accent());
     [st addArrangedSubview:title]; [st addArrangedSubview:sub];
+    // (switch2mac) the rows a player needs first (the list's basic ones and the picture's upscaling), then the engine's tuning under "Advanced", folded
+    NSMutableArray *main = [NSMutableArray array], *adv = [NSMutableArray array];
+    for (NSDictionary *s in list) [([s[@"level"] isEqual:@"basic"] || [@[@"DM_UPSCALER", @"DM_PRESENT_UPSCALE"] containsObject:s[@"env"]] ? main : adv) addObject:s];
     NSString *sec = nil;
-    for (NSDictionary *s in list) {
+    for (NSDictionary *s in main) {
         NSString *sc = [s[@"section"] isEqual:@"Game"] ? @"DISPLAY" : [s[@"section"] uppercaseString];
         if (![sc isEqual:sec]) { sec = sc; NSTextField *h = panel_label(sc, 11, NSFontWeightBold, [NSColor colorWithWhite:0.6 alpha:1]); [st addArrangedSubview:h]; [st setCustomSpacing:4 afterView:h]; }
         [st addArrangedSubview:[self card:s]];
+    }
+    self.advanced = [NSMutableArray array];
+    if (adv.count) {
+        self.more = [NSButton buttonWithTitle:@"Advanced ▸" target:self action:@selector(toggleAdvanced:)]; self.more.bordered = NO;
+        self.more.attributedTitle = [[NSAttributedString alloc] initWithString:@"Advanced ▸" attributes:@{NSFontAttributeName: [NSFont systemFontOfSize:11 weight:NSFontWeightBold], NSForegroundColorAttributeName: [NSColor colorWithWhite:0.6 alpha:1]}];
+        [st addArrangedSubview:self.more];
+        for (NSDictionary *s in adv) { NSView *c = [self card:s]; c.hidden = YES; [self.advanced addObject:c]; [st addArrangedSubview:c]; }
     }
     if (!list.count) [st addArrangedSubview:panel_label(@"No settings list in this app (Resources/dm/launcher.json).", 12, NSFontWeightRegular, NSColor.whiteColor)];
     NSScrollView *sv = [[NSScrollView alloc] initWithFrame:self.bounds]; sv.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
@@ -388,6 +416,7 @@ static NSString *setting_value(NSDictionary *s) {
     NSView *doc = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, r.size.width, 10)]; [doc addSubview:st]; st.translatesAutoresizingMaskIntoConstraints = NO;
     [NSLayoutConstraint activateConstraints:@[[st.leadingAnchor constraintEqualToAnchor:doc.leadingAnchor], [st.trailingAnchor constraintEqualToAnchor:doc.trailingAnchor], [st.topAnchor constraintEqualToAnchor:doc.topAnchor]]];
     doc.frame = NSMakeRect(0, 0, r.size.width - 16, st.fittingSize.height); sv.documentView = doc; [self addSubview:sv];
+    self.stack = st; self.doc = doc;
     [doc scrollPoint:NSMakePoint(0, doc.isFlipped ? 0 : doc.bounds.size.height)];
     return self;
 }
@@ -406,7 +435,10 @@ static NSString *setting_value(NSDictionary *s) {
         [sl.widthAnchor constraintEqualToConstant:150].active = YES; ctl = sl;
     } else { NSSwitch *w = [NSSwitch new]; w.state = [v isEqual:s[@"on"] ?: @"1"] ? NSControlStateValueOn : NSControlStateValueOff; ctl = w; }
     ctl.target = self; ctl.action = @selector(changed:); ctl.tag = (NSInteger)self.rows.count - 1;
+    BOOL live = [s[@"env"] isEqual:@"DM_OVERLAY"] || [s[@"env"] isEqual:@"DM_FULLSCREEN"];
+    if (!live && [g_locked containsObject:s[@"env"]]) { ctl.enabled = NO; row.locked = YES; }   // set by how the game was started: a saved choice would be ignored
     NSString *n = s[@"note"]; row.note = panel_label(n ?: @"", 11, NSFontWeightRegular, [NSColor colorWithWhite:0.65 alpha:1]); row.note.hidden = !n.length;
+    [self mark:row value:v];
     for (NSView *x in @[l, row.note, ctl]) { x.translatesAutoresizingMaskIntoConstraints = NO; [c addSubview:x]; }
     [NSLayoutConstraint activateConstraints:@[
         [c.widthAnchor constraintEqualToConstant:self.bounds.size.width - 56],
@@ -426,9 +458,30 @@ static NSString *setting_value(NSDictionary *s) {
     else v = ((NSSwitch *)ctl).state == NSControlStateValueOn ? (s[@"on"] ?: @"1") : (s[@"off"] ?: @"0");
     NSString *env = s[@"env"]; NSUserDefaults *u = settings_store(); NSString *key = [@"launcher." stringByAppendingString:env];
     if ([v isEqual:s[@"default"]]) [u removeObjectForKey:key]; else [u setObject:v forKey:key];
+    [u synchronize];   // written now: the game may be quit (or crash) before the preferences would be saved
+    if (!g_chosen) g_chosen = [NSMutableDictionary dictionary];
+    g_chosen[env] = v; [self mark:self.rows[(NSUInteger)ctl.tag] value:v];
     LOG("front end: setting %s = %s (%s)", env.UTF8String, v.UTF8String, u ? "saved for the next launch" : "not saved: no app preferences");
     if ([env isEqual:@"DM_OVERLAY"]) overlay_set([v isEqual:@"off"] ? 0 : [v isEqual:@"detailed"] ? 2 : 1);
     if ([env isEqual:@"DM_FULLSCREEN"] && ([v isEqual:@"1"] != ((g_win.styleMask & NSWindowStyleMaskFullScreen) != 0))) [g_win toggleFullScreen:nil];
+}
+// A row whose choice differs from what this run uses says so under its name (the overlay and display mode apply at once)
+- (void)mark:(DmPanelRow *)row value:(NSString *)v {
+    NSString *env = row.s[@"env"], *n = row.s[@"note"] ?: @"";
+    BOOL live = [env isEqual:@"DM_OVERLAY"] || [env isEqual:@"DM_FULLSCREEN"], later = !live && ![v isEqual:setting_running(row.s)];
+    NSString *add = row.locked ? @"Set by how this game was started (its launch settings or env.txt), so it can't be changed here."
+                  : later ? @"Changed: applies when the game starts again." : nil;
+    NSString *t = add ? (n.length ? [NSString stringWithFormat:@"%@\n%@", n, add] : add) : n;
+    row.note.stringValue = t; row.note.hidden = !t.length;
+    row.note.textColor = row.locked ? [NSColor colorWithCalibratedRed:1 green:0.75 blue:0.35 alpha:1] : later ? ui_accent() : [NSColor colorWithWhite:0.65 alpha:1];
+}
+- (void)toggleAdvanced:(id)sender {
+    (void)sender; BOOL show = self.advanced.firstObject.hidden;
+    for (NSView *c in self.advanced) c.hidden = !show;
+    NSString *t = show ? @"Advanced ▾" : @"Advanced ▸";
+    self.more.attributedTitle = [[NSAttributedString alloc] initWithString:t attributes:@{NSFontAttributeName: [NSFont systemFontOfSize:11 weight:NSFontWeightBold], NSForegroundColorAttributeName: [NSColor colorWithWhite:0.6 alpha:1]}];
+    [self.stack layoutSubtreeIfNeeded];
+    NSRect f = self.doc.frame; f.size.height = self.stack.fittingSize.height; self.doc.frame = f;
 }
 - (void)mouseDown:(NSEvent *)e { (void)e; }   // clicks on the panel's background do not reach the game
 @end
@@ -482,6 +535,7 @@ void front_run(void (*guest)(void)) {
         g_layer.contentsScale = win.backingScaleFactor;
         if (getenv("DM_METAL_HUD") && atoi(getenv("DM_METAL_HUD"))) { g_layer.developerHUDProperties = @{@"mode": @"default"}; LOG("front end: Metal performance HUD on (DM_METAL_HUD)"); }   // Apple's HUD over the game: frame rate, frame and GPU time, memory
         v.layer = g_layer; [(DmGameView *)v fitDrawable];
+        settings_lock_scan();   // (switch2mac) the settings the launch fixed: the panel shows them as not changeable
         const char *ov = getenv("DM_OVERLAY"); g_ov_mode = ov && !strcmp(ov, "off") ? 0 : ov && !strcmp(ov, "detailed") ? 2 : 1;
         g_ov = [[DmOverlay alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)]; [v addSubview:g_ov]; [g_ov refreshWithCPU:0];
         void s2m_share_attach(NSWindow *win); s2m_share_attach(win);   // the shared shader list: contribution file and the offer to send it, when the game closes (s2m_share.m)
