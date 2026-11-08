@@ -27,6 +27,10 @@ Games whose speed the app controls (Breath of the Wild, Tears of the Kingdom and
 
 On a Mac, a game checked at that speed (Fire Emblem Fortune's Weave, Mario & Luigi: Brothership) also offers **120 fps**. It needs a screen that shows 120 Hz, and uses more GPU and power. When frames do not fit, during movies, or on a slower screen, the game drops to 60 for a while, so it keeps its real speed. If you see the frame rate move between 60 and 120 and would rather it stayed still, choose 60.
 
+### Dynamic resolution
+
+Off, the default, keeps the 3D picture at full size. On lets the game lower its resolution when frames run heavy, as on the Switch: steadier frame rate, softer picture. Only games whose resolution control the app can hold offer it (NieR:Automata, Ocarina of Time).
+
 ### Render scale
 
 The size of the 3D picture, from 50 to 100 %. Below 100 % the size is fixed there and the game's own dynamic resolution is off; 100 % keeps the game's own. Lower can be lighter on the GPU but is blurrier; the HUD and text keep their sharpness. Only games the app can scale offer it.
@@ -107,7 +111,7 @@ A controller's vibration weaker than this stays off, and the rest is spread over
 
 ### Press a button to join
 
-Off by default: each controller is a player as soon as it connects, in the order the system lists them. On: a controller becomes a player only when you press one of its buttons, as the lowest player free, so the players choose their order and how many play. That press also reaches the game. Press a button on every controller before the game asks how many play: a game that wants two players and sees one closes its player screen.
+Off by default: each controller is a player as soon as it connects, in the order the system lists them. On: a controller becomes a player only when you press one of its buttons, as the lowest player free, so the players choose their order and how many play. That press also reaches the game. When a game asks for more players than have joined, a prompt over the game waits for the others to press a button; B closes it.
 
 ## Performance
 
