@@ -480,8 +480,15 @@ static void settings_lock_scan(void) {
     for (NSView *c in self.advanced) c.hidden = !show;
     NSString *t = show ? @"Advanced ▾" : @"Advanced ▸";
     self.more.attributedTitle = [[NSAttributedString alloc] initWithString:t attributes:@{NSFontAttributeName: [NSFont systemFontOfSize:11 weight:NSFontWeightBold], NSForegroundColorAttributeName: [NSColor colorWithWhite:0.6 alpha:1]}];
-    [self.stack layoutSubtreeIfNeeded];
-    NSRect f = self.doc.frame; f.size.height = self.stack.fittingSize.height; self.doc.frame = f;
+    [self fitDoc];
+}
+// (switch2mac) The scrolled area's height, measured once the panel is on screen: before that the wrapping notes measure as one line each, the area came out shorter than
+// its rows and the last ones could not be scrolled to (Mario Kart World's long list on an M4). Twice: the second pass after the notes have taken their wrapped width
+- (void)fitDoc {
+    for (int pass = 0; pass < 2; pass++) {
+        [self layoutSubtreeIfNeeded]; [self.stack layoutSubtreeIfNeeded];
+        NSRect f = self.doc.frame; f.size.height = MAX(self.stack.fittingSize.height, NSMaxY(self.stack.frame)); self.doc.frame = f;
+    }
 }
 - (void)mouseDown:(NSEvent *)e { (void)e; }   // clicks on the panel's background do not reach the game
 @end
@@ -492,7 +499,8 @@ static void panel_toggle(void) {
     CGFloat w = fmin(500, cv.bounds.size.width - 40), h = fmin(560, cv.bounds.size.height - 40);
     g_panel = [[DmPanel alloc] initWithFrame:NSMakeRect(floor((cv.bounds.size.width - w) / 2), floor((cv.bounds.size.height - h) / 2), w, h)];
     g_panel.autoresizingMask = NSViewMinXMargin | NSViewMaxXMargin | NSViewMinYMargin | NSViewMaxYMargin;
-    [cv addSubview:g_panel positioned:NSWindowAbove relativeTo:nil]; LOG("front end: settings panel open (key 2)");
+    [cv addSubview:g_panel positioned:NSWindowAbove relativeTo:nil]; [g_panel fitDoc]; LOG("front end: settings panel open (key 2)");
+    dispatch_async(dispatch_get_main_queue(), ^{ [g_panel fitDoc]; });   // and once more after the first layout pass on screen
 }
 
 static DmOverlay *g_ov;
