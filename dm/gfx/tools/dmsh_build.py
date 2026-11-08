@@ -456,10 +456,16 @@ static inline __attribute__((always_inline)) float4 dm_bmix(float4 r, float4 w, 
 static inline __attribute__((always_inline)) float dm_bmix(float r, float w, float4 k) {{ return r + (w - r) * k.x; }}
 template<typename V, typename T, typename... A> static inline __attribute__((always_inline)) V dm_bs(V r, constant dm_border_t* b, uint i, T t, sampler w, A... a)
 {{
-    if (b->mask >> i & 1u) r = dm_bmix(r, t.sample(w, a...), b->k[i]);
+    if (DM_BORDER_LIVE && (b->mask >> i & 1u)) r = dm_bmix(r, t.sample(w, a...), b->k[i]);
     return r;
 }}
 '''
+# The corrections also depend on the function constant abi.BORDER_FC: the host sets it (true: off) for a pipeline whose draw or dispatch binds no sampler with a twin, the usual case,
+# and the twin samples are compiled out with the registers they kept live (a uniform branch still costs them: Ocarina of Time's 1080p material passes spilled 300-400 bytes a thread,
+# 1.5 ms of a 26.7 ms frame on a MacBook Air M4, and its kernels, NDSR's network among them, 0.25 ms more). A pipeline the host does not specialize leaves it undefined: every sample
+# corrects as before. A kernel's pipeline is looked up by its specialized descriptor (nvn_mtl.m cps_new), and pso_offline.py builds it into the app's archive
+BORDER_LIVE_FC = (f'constant bool dm_border_off [[function_constant({abi.BORDER_FC})]];\n'
+                  'constant bool dm_border_live = !is_function_constant_defined(dm_border_off) || !dm_border_off;\n#define DM_BORDER_LIVE dm_border_live\n')
 def border_emu(msl):
     """The samples of the argument buffer's textures through its sampler members, T.sample(S, args) → dm_bs(T.sample(S, args), block, bit, T, S_w, args) (see BORDER_HELPERS);
     the source unchanged when it samples through none. Only samples of float textures: an integer texture is not filtered, and its border colour is Maxwell's integer one, which
@@ -487,7 +493,7 @@ def border_emu(msl):
         args = msl[m.end():i - 1]
         twin = f'spvDescriptorSet0.{m.group(2)}{abi.BORDER_TWIN}'
         msl = msl[:m.start()] + f'dm_bs({msl[m.start():i]}, spvDescriptorSet0.{abi.BORDER_MEMBER}, {bit[m.group(2)]}u, spvDescriptorSet0.{m.group(1)}, {twin}, {args})' + msl[i:]
-    return msl.replace('using namespace metal;\n', 'using namespace metal;\n' + BORDER_HELPERS, 1)
+    return msl.replace('using namespace metal;\n', 'using namespace metal;\n' + BORDER_LIVE_FC + BORDER_HELPERS, 1)
 # A colour output's rgb where its alpha is exactly 0 and the rgb is not finite. NVIDIA's blender takes a zero factor times anything as 0 (Direct3D's rule: 0 × Inf = 0 × NaN = 0), so a pixel
 # shader may leave garbage in the colour of a pixel it means to add nothing to and say so with alpha 0: with SRC_ALPHA blending the target keeps its value. Apple's blender multiplies as IEEE
 # does (0 × NaN = NaN), stores the NaN, and every later pass that reads the target spreads it.
