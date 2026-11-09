@@ -13061,6 +13061,7 @@ static int fb_pool_reads_depth(NvProg *pr) {
     }
     os_unfair_lock_unlock(&g_rmu);
     return overlap;
+}
 // ---- The depth attachment sampled in its own pass ----
 // On the console a draw that samples the depth attachment reads what is stored when it starts; on Apple's GPUs a depth attachment sampled in the pass that writes it reads whole
 // compressed blocks of undefined content, and Metal has no tile read for depth. So, as for colour (the snapshot rule above), by what this pass and this draw write:
