@@ -294,10 +294,7 @@ static void engine_name(NSString **name, NSString **version) {
     NSString *eng, *engVer; engine_name(&eng, &engVer);
     NSString *fpsText = [NSString stringWithFormat:@"FPS %.0f", _fpsNow];
     line(fpsText, fc);
-    if (eng.length) {   // the engine, dimmed, at the right of the FPS line (the font is monospaced: pad to the hint line's width)
-        NSInteger pad = MAX(2, 21 - (NSInteger)fpsText.length - (NSInteger)eng.length);
-        line([[@"" stringByPaddingToLength:pad withString:@" " startingAtIndex:0] stringByAppendingString:eng], [NSColor colorWithWhite:0.6 alpha:1]);
-    }
+    if (eng.length) line([@"   " stringByAppendingString:eng], [NSColor colorWithWhite:0.6 alpha:1]);   // the build, dimmed, just after the FPS figure (left-aligned)
     line(gw0 > 0 ? [NSString stringWithFormat:@"\n%dx%d", gw0, gh0] : @"\n--", green);
     if (g_ov_mode == 2) {
         line([NSString stringWithFormat:@"\nGPU %@", gpu], _gpu > 16.7 ? yellow : green);
@@ -350,6 +347,11 @@ static NSColor *ui_accent(void) { return [NSColor colorWithCalibratedRed:80/255.
 @property(copy) NSDictionary *s; @property(strong) NSTextField *note; @property BOOL locked;
 @end
 @implementation DmPanelRow @end
+@interface DmFlipView : NSView
+@end
+@implementation DmFlipView
+- (BOOL)isFlipped { return YES; }
+@end
 @interface DmPanel : NSView
 @property(strong) NSMutableArray<DmPanelRow *> *rows;
 @property(strong) NSMutableArray<NSView *> *advanced;   // (switch2mac) the engine's tuning rows, behind "Advanced"
@@ -413,11 +415,11 @@ static void settings_lock_scan(void) {
     if (!list.count) [st addArrangedSubview:panel_label(@"No settings list in this app (Resources/dm/launcher.json).", 12, NSFontWeightRegular, NSColor.whiteColor)];
     NSScrollView *sv = [[NSScrollView alloc] initWithFrame:self.bounds]; sv.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     sv.drawsBackground = NO; sv.hasVerticalScroller = YES;
-    NSView *doc = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, r.size.width, 10)]; [doc addSubview:st]; st.translatesAutoresizingMaskIntoConstraints = NO;
+    NSView *doc = [[DmFlipView alloc] initWithFrame:NSMakeRect(0, 0, r.size.width, 10)]; [doc addSubview:st]; st.translatesAutoresizingMaskIntoConstraints = NO;
     [NSLayoutConstraint activateConstraints:@[[st.leadingAnchor constraintEqualToAnchor:doc.leadingAnchor], [st.trailingAnchor constraintEqualToAnchor:doc.trailingAnchor], [st.topAnchor constraintEqualToAnchor:doc.topAnchor]]];
     doc.frame = NSMakeRect(0, 0, r.size.width - 16, st.fittingSize.height); sv.documentView = doc; [self addSubview:sv];
     self.stack = st; self.doc = doc;
-    [doc scrollPoint:NSMakePoint(0, doc.isFlipped ? 0 : doc.bounds.size.height)];
+    [doc scrollPoint:NSZeroPoint];   // flipped document: the top
     return self;
 }
 - (BOOL)isFlipped { return YES; }
@@ -484,11 +486,19 @@ static void settings_lock_scan(void) {
 }
 // (switch2mac) The scrolled area's height, measured once the panel is on screen: before that the wrapping notes measure as one line each, the area came out shorter than
 // its rows and the last ones could not be scrolled to (Mario Kart World's long list on an M4). Twice: the second pass after the notes have taken their wrapped width
+// Then the panel takes the rows' height, up to the window's less a margin (it was 560 at most: on a tall window the last rows sat below a scroll the player did not
+// see, and the top scrolled out of view), centred again, and shows its top
 - (void)fitDoc {
     for (int pass = 0; pass < 2; pass++) {
         [self layoutSubtreeIfNeeded]; [self.stack layoutSubtreeIfNeeded];
         NSRect f = self.doc.frame; f.size.height = MAX(self.stack.fittingSize.height, NSMaxY(self.stack.frame)); self.doc.frame = f;
+        NSView *cv = self.superview;
+        if (cv) {
+            CGFloat h = fmin(ceil(f.size.height) + 2, cv.bounds.size.height - 60); if (h < 200) h = fmin(200, cv.bounds.size.height - 20);
+            NSRect p = self.frame; p.size.height = h; p.origin.y = floor((cv.bounds.size.height - h) / 2); self.frame = p;
+        }
     }
+    [self.doc scrollPoint:NSZeroPoint];
 }
 - (void)mouseDown:(NSEvent *)e { (void)e; }   // clicks on the panel's background do not reach the game
 @end
@@ -496,7 +506,7 @@ static void panel_toggle(void) {
     NSView *cv = g_win.contentView;
     if (g_panel) { [g_panel removeFromSuperview]; g_panel = nil; input_resume(); LOG("front end: settings panel closed"); return; }
     input_release();
-    CGFloat w = fmin(500, cv.bounds.size.width - 40), h = fmin(560, cv.bounds.size.height - 40);
+    CGFloat w = fmin(500, cv.bounds.size.width - 40), h = cv.bounds.size.height - 60;   // fitDoc then takes the rows' height
     g_panel = [[DmPanel alloc] initWithFrame:NSMakeRect(floor((cv.bounds.size.width - w) / 2), floor((cv.bounds.size.height - h) / 2), w, h)];
     g_panel.autoresizingMask = NSViewMinXMargin | NSViewMaxXMargin | NSViewMinYMargin | NSViewMaxYMargin;
     [cv addSubview:g_panel positioned:NSWindowAbove relativeTo:nil]; [g_panel fitDoc]; LOG("front end: settings panel open (key 2)");
