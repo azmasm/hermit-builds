@@ -121,6 +121,7 @@ static void compute_pipelines(void) {
     NSString *src = @"#include <metal_stdlib>\nusing namespace metal;\nkernel void k(device uint *o [[buffer(0)]], uint i [[thread_position_in_grid]]) { o[i] = i * 3 + 1; }\n";
     id<MTLLibrary> kl = [g_dev newLibraryWithSource:src options:nil error:&err], ul = [g_dev newLibraryWithSource:[src stringByAppendingString:@"// unregistered\n"] options:nil error:&err];
     id<MTLFunction> kf = fn4_note([kl newFunctionWithName:@"k"], kl, @"k", nil), uf = [ul newFunctionWithName:@"k"];
+    if (!kl || !ul || !kf || !uf) { fprintf(stderr,"compute fixture library/function failure: %s\n", err.localizedDescription.UTF8String); abort(); }
     uint64_t built = g_cps_built, run = g_cps_run, arch = g_cps_arch; int pending = g_arch_new;
     id<MTLComputePipelineState> kp = cps_new(kf, &err);
     EXPECT("compute: a pipeline", 1, kp != nil);
