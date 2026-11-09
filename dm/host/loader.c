@@ -323,7 +323,7 @@ void dm_fps_state_apply(void) {
     if (t != 0 && t != 30 && t != 60 && !(t == 120 && DM_GAME_FPS_MAX >= 120 && dm_fps_fractional)) { LOG("[RED] DM_FPS_TARGET=%s: must be 0, 30 or 60; using the game's own frame step", e); t = 0; }
     float f = (float)t; memcpy(dm_fps_state, &f, sizeof f);
     if (dm_fps_fractional) { float start = t == 120 ? 60.0f : 0.0f; memcpy(dm_fps_state + 0x40, &start, sizeof start); }
-    // Render scale of the 3D views (the stubs at Tears of the Kingdom's main+0xd5cc0, Breath of the Wild's main+0x1266880, Hades II's render size): 1.0 keeps the game's own size
+    // Render scale of the 3D views (the stubs at Tears of the Kingdom's main+0xd5cc0, Breath of the Wild's main+0x1266880, Ocarina of Time's view-size update, Hades II's render size): 1.0 keeps the game's own size
     // and dynamic resolution; another factor fixes the size at that fraction (DM_RENDER_SCALE, 0.5 to the stub's largest scale: 1.0, or above for a stub that also raises it,
     // Hades II's 3.0). Independent of the frame step: written at target 0 too
     const char *rs = getenv("DM_RENDER_SCALE"); float sc = 1.0f, hi = g_render_scale_max;
