@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../
 # and the default fast mode lets each GPU's backend compiler treat them as always false; on the A20 Pro the opening course's odd frames had 727k NaN pixels in the main image (a few dozen with the same AIR on the M4 Pro), which became the black band / black-edged glow
 # -fpreserve-invariance: [[invariant]] position outputs only agree across shaders with this flag (as dmsh_build.py's MAC_METAL: a depth pre-pass followed by a less-or-equal G-buffer)
 # PR #556: O3 without correlated value propagation avoids the pathological switch lowering, while retaining AIR passes and late vector combining.
-METAL = ['xcrun', '-sdk', 'iphoneos', 'metal', '-c', '-O3', '-mios-version-min=18.0', '-fmetal-math-mode=relaxed', '-fpreserve-invariance', '-Xclang', '-disable-llvm-passes']
+METAL = ['xcrun', '-sdk', 'iphoneos', 'metal', '-c', '-O3', '-mios-version-min=18.0', '-fmetal-math-mode=relaxed', '-fpreserve-invariance', '-fwrapv', '-Xclang', '-disable-llvm-passes']
 METALLIB = ['xcrun', '-sdk', 'iphoneos', 'metallib']
 OPT_RECORD = '; metal-opt default<O3> -CVP +vector-combine,instcombine,early-cse ' + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:12]
 RECORD = ' '.join(METAL) + '; ' + ' '.join(METALLIB) + OPT_RECORD                   # Written into json chain.metal
