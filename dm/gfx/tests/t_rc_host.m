@@ -103,7 +103,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         rc_gpu_samples(address,(const vis_list*)&snapshot);assert(npm_find(&g_rc_gpu,address)->version!=operand.version);
         sbw_note(address+7,1,SBW_GPU);assert(!npm_find(&g_rc_gpu,address)->kind);
         rc_gpu_samples(address,(const vis_list*)&snapshot);
-        rc_gpu_write(0,0);assert(!npm_find(&g_rc_gpu,address)->kind);
+        rcp_gpu_write(0,0);assert(!npm_find(&g_rc_gpu,address)->kind);
         rc_gpu_samples(address,(const vis_list*)&snapshot);
         snapshot.s[0].buf=(__bridge void*)seed;rc_gpu_samples(address,(const vis_list*)&snapshot);assert(!npm_find(&g_rc_gpu,address)->kind);
         snapshot.s[0].buf=(__bridge void*)g_vis;rc_gpu_samples(address,(const vis_list*)&snapshot);
@@ -172,8 +172,8 @@ int main(int argc, char **argv) { @autoreleasepool {
             assert(inverted>=g_cur_arena->gpu&&inverted+20<=g_cur_arena->gpu+g_cur_arena->len);
             enc_b_copy_buffer(blit(),g_cur_arena->buf,inverted-g_cur_arena->gpu,out,32,20);
             if(g_blit){enc_b_end(g_blit);g_blit=nil;}
-            rc_gpu_write((uint64_t)guest+5000,4);assert(rc_mask_find(g_exec_cur,condition,(uint32_t)mode)==masked);
-            rc_gpu_write(condition+23,1);assert(!rc_mask_find(g_exec_cur,condition,(uint32_t)mode));checks++;
+            rcp_gpu_write((uint64_t)guest+5000,4);assert(rc_mask_find(g_exec_cur,condition,(uint32_t)mode)==masked);
+            rcp_gpu_write(condition+23,1);assert(!rc_mask_find(g_exec_cur,condition,(uint32_t)mode));checks++;
             assert(rc_mask_prepare(readonly,NULL,&direct));
             rc_gpu_shader_write(writer);assert(!rc_mask_find(g_exec_cur,condition,(uint32_t)mode));checks+=2;
             g_exec_cur=NULL;g_rc_mode=2;checks+=5;

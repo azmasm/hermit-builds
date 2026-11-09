@@ -1004,7 +1004,7 @@ typedef struct {uint64_t lo,hi;} rc_cpu_range;
 static rc_cpu_range *g_rc_cpu_ranges;static size_t g_rc_cpu_nr,g_rc_cpu_cap;
 
 static int rc_gpu_on(void) { static int on=-1; if(on<0){const char *s=getenv("DM_NVN_GPU_PREDICATE");on=s&&atoi(s);}return on; }
-static void rc_gpu_write(uint64_t address,uint64_t size) {
+static void rcp_gpu_write(uint64_t address,uint64_t size) {   // (oot-mac7) #1663's GPU predication; main's rc_gpu_write (render-condition replay) is below
     if(!rc_gpu_on())return;
     g_rc_write_epoch++;
     if(!size||address>UINT64_MAX-size||nvn_sparse_alias(address,address+size)){npm_invalidate_all(&g_rc_gpu);npm_invalidate_all(&g_rc_mask_watch);}
@@ -1013,7 +1013,7 @@ static void rc_gpu_write(uint64_t address,uint64_t size) {
 
 static void rc_gpu_cpu_write(uint64_t address,uint64_t size) {
     if(!rc_gpu_on())return;
-    rc_gpu_write(address,size);
+    rcp_gpu_write(address,size);
     if(!size||address>UINT64_MAX-size||nvn_sparse_alias(address,address+size)){g_rc_cpu_unknown=1;return;}
     if(size>32){
         uint64_t end=address+size;
@@ -1305,7 +1305,7 @@ enum { SBW_GPU = 1, SBW_REPORT = 2 };
 static uint32_t g_sbw_gen;   // bumped by every write noted that this submission's shadows must respect (a cached shadow made before it is checked again)
 static void drw_note(uint64_t lo, uint64_t n);   // the writes since the last drain (below g_wr_epoch)
 static void sbw_note(uint64_t lo, uint64_t n, int src) {
-    if (src == SBW_GPU) { rc_gpu_write(lo,n); g_sbw_gen++; drw_note(lo, n); }
+    if (src == SBW_GPU) { rc_gpu_write(lo,n); rcp_gpu_write(lo,n); g_sbw_gen++; drw_note(lo, n); }
     if (!n) { if (src == SBW_GPU) g_sbw_over = 1; return; }
     uint64_t hi = lo + n;
     if (src == SBW_GPU && ((hi - 1) >> 12) - (lo >> 12) >= SBW_WPAGES) {   // a report is 16 bytes, never wide
@@ -1329,7 +1329,7 @@ static inline unsigned pend_bucket(uint64_t page) { return (unsigned)((page * 0x
 static void pend_reset(void) { g_npend = g_pend_over = g_nupd = g_npnode = g_nwide = g_nsbw = g_nsbw_w = g_sbw_over = 0; if (!++g_pend_gen) { memset(g_pend_hgen, 0, sizeof g_pend_hgen); memset(g_sbwp, 0, sizeof g_sbwp); g_pend_gen = 1; } }
 static void vc_gpu_write(uint64_t dst, uint64_t n);   // kept index ranges under the written range are not trusted again (ix_range)
 static int pend_add(uint64_t dst, uint64_t n, int kind) {
-    rc_gpu_write(dst,n);
+    rcp_gpu_write(dst,n);
     vc_gpu_write(dst, n); drw_note(dst, n ? n : 1);
     if (g_pend_over) return -1;
     uint64_t p0 = dst >> 12, p1 = (dst + (n ? n : 1) - 1) >> 12; int narrow = p1 - p0 < PEND_SPAN;
@@ -7425,15 +7425,15 @@ static void rc_gpu_shader_write(NvProg *pr) {
     if(!rc_gpu_on()||(!g_rc_gpu.count&&!g_rc_mask_watch.count)||!pr)return;
     for(int st=0;st<6;st++){NvShader *sh=pr->sh[st];if(!sh)continue;
         for(int i=0;i<sh->rf.nb;i++){const nvn_rbind *b=&sh->rf.b[i];if(!b->rw)continue;
-            if(b->kind!=NVN_RB_SBUFP||b->reg>=16){rc_gpu_write(0,0);return;}
+            if(b->kind!=NVN_RB_SBUFP||b->reg>=16){rcp_gpu_write(0,0);return;}
             if(sh->sb_ro&(1u<<b->reg))continue;
             const p_bind_buf *u=&S.ssbo[st][b->reg];if(!u->addr)continue; // host dummy
             uint64_t n=u->size;
             if(!n){void *buffer;uint64_t offset;
-                if(!mtl_addr(u->addr,1,&buffer,&offset)){rc_gpu_write(0,0);return;}
+                if(!mtl_addr(u->addr,1,&buffer,&offset)){rcp_gpu_write(0,0);return;}
                 n=sbw_len(0,buffer,offset);
             }
-            rc_gpu_write(u->addr,n);
+            rcp_gpu_write(u->addr,n);
         }
     }
 }
