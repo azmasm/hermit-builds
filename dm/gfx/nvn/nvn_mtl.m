@@ -14874,6 +14874,19 @@ static int dispatch_own(void) {
 // "Compute dispatches ordered by the game's own barriers" (Ocarina of Time)
 static uint64_t g_disp_beside; static int g_disp_last_beside;   // dispatches placed beside the one before (t_dispatch_overlap); whether the last one was
 static int dispatch_overlap(void) { static int v = -1; if (v < 0) { const char *e = getenv("DM_NVN_DISPATCH_OVERLAP"); v = e ? atoi(e) != 0 : DM_GAME_DISPATCH_OVERLAP; if (v) MLOG("dispatch overlap: the game's dispatches with no barrier of its between them run side by side (DM_NVN_DISPATCH_OVERLAP=0 orders each after the one before)"); } return v; }
+// An indirect dispatch does not join a copy encoder that already holds work: the encoder ends first, and the dispatch goes into the next one, which begins with a queue barrier
+// (blit_open) that waits for everything before it. Inside one Metal 4 compute encoder, the barrier dispatch_enc puts between two dispatches did not order an indirect dispatch's
+// group counts after the earlier dispatch that wrote them: Ocarina of Time's foliage cull (compute shaders 83df46a0b1b379b4, 60dd0e6eac91f712, cee08c634ef1f343, 58f47abfa0a84773,
+// e855420a39e60874, then the list its mesh shaders draw) came out short in 39 % of frames on an M1 Max, 16 of its 276 clusters missing at random, and the flower bushes showed holes
+// where their front leaves and flowers should be; with this, 0 of 600 frames. Which of Metal's reads misses the encoder's barrier, the indirect-argument fetch or the copy of the
+// counts into the driver segment (dispatch), is not known. The direct dispatches keep sharing the encoder (an encoder each for them did not change the count: 41 % of frames).
+// DM_NVN_IND_SPLIT=0 lets indirect dispatches join the open encoder again (to measure)
+static int ind_split(void) {
+    static int v = -1;
+    if (v < 0) { const char *e = getenv("DM_NVN_IND_SPLIT"); v = !(e && !strcmp(e, "0")); if (!v) MLOG("DM_NVN_IND_SPLIT=0: indirect dispatches join the open copy encoder (their group counts can be read before an earlier dispatch in it wrote them)"); }
+    return v;
+}
+static uint64_t g_ind_splits;
 static id<MTL4ComputeCommandEncoder> dispatch_enc(int game) {   // game: one of the game's dispatches (0: the host's own, ordered as a copy is)
     id<MTL4ComputeCommandEncoder> e = blit_open(); g_gp_disp++;
     int beside = game && g_blit_ops && g_blit_disponly && !g_cs_gbar && dispatch_overlap();
@@ -15023,6 +15036,8 @@ static void dispatch(const p_dispatch *dp) {
         if (tg_groups > (g_dev.maxBufferLength - (4u << 20)) / cs->rf.tg_spill) { RED_ONCE(162, "dispatch of %s: %llu workgroups of %u bytes of threadgroup memory exceed Metal's largest buffer; skipped", cs->key, (unsigned long long)tg_groups, cs->rf.tg_spill); return; }
     }
     int own = dispatch_own();
+    if (dp->ind && !own && g_blit && ind_split()) { enc_b_end(g_blit); g_blit = nil;   // an indirect dispatch begins an encoder (ind_split)
+        if (!g_ind_splits++) MLOG("indirect dispatch: the copy encoder ends before it, so its group counts are read after the work before it (first time, %s)", cs->key); }
     g_dispatch_dim[0] = (uint32_t)dp->x; g_dispatch_dim[1] = (uint32_t)dp->y; g_dispatch_dim[2] = (uint32_t)dp->z;   // read back by the driver segment c0 (encode_args_)
     g_c0_dim_buf = nil;
     // A sampled format view may upgrade its texture and copy its pixels. Prepare the compute table before opening an encoder of its own,
