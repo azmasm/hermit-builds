@@ -201,7 +201,10 @@ static class SwshXlate
                 byte[] code = File.ReadAllBytes((string)job["code"]);
                 var acc = new Accessor(code, job);
                 // Job debug = false: turn off DebugMode (DebugMode skips the AST optimizer and the output is full of temporaries; semantics unchanged)
-                var flags = TranslationFlags.MetalImageAtomics | TranslationFlags.MetalUniformBounds | (job["debug"] is JsonNode dbg && !(bool)dbg ? 0 : TranslationFlags.DebugMode) | ((string)job["stage"] == "cs" ? TranslationFlags.Compute : 0) | ((string)job["arch"] == "sm86" ? TranslationFlags.Ampere : 0);
+                // (switch2mac) A Switch 2 (Ampere) shader's uniform reads are not bounded by the binding's size, as before 26062f9e: Ocarina of Time reads past its bindings and relies on the data there
+                // (issue #2218: horses and the slingshot stretched to the origin), and the comparison at every read made its hot shaders about twice as long (the main scene's pixel shader
+                // a1a56cf6d62ae798: 5,085 instructions and 701 branches after the optimizer with the bound, 2,363 and 112 without; the main task shader a5288d0a6c4971fd 4,667 against 1,972)
+                var flags = TranslationFlags.MetalImageAtomics | (job["debug"] is JsonNode dbg && !(bool)dbg ? 0 : TranslationFlags.DebugMode) | ((string)job["stage"] == "cs" ? TranslationFlags.Compute : 0) | ((string)job["arch"] == "sm86" ? TranslationFlags.Ampere : TranslationFlags.MetalUniformBounds);
                 var ctx = Translator.CreateContext(0, acc, new TranslationOptions(TargetLanguage.Spirv, TargetApi.Vulkan, flags));
                 bool geometry = job["geometry_topology"] != null;
                 ShaderProgram p = ctx.Translate(geometry);
