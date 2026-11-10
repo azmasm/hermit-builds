@@ -142,6 +142,13 @@ static void fast_preset(void) {
     setenv("DM_RENDER_SCALE", "0.82", 1); setenv("DM_UPSCALER", "metalfx", 1);
     fprintf(stderr, "launcher: env DM_RENDER_SCALE=0.82 DM_UPSCALER=metalfx (Fast mode, DM_FAST_720=1)\n");
 }
+// (switch2mac) Frame generation (DM_FRAMEGEN=1) shows a generated frame only between presents held two ticks, the 30 fps frame rate: the toggle sets it, so one switch is enough
+static void framegen_preset(void) {
+    const char *f = getenv("DM_FRAMEGEN");
+    if (!f || strcmp(f, "1")) return;
+    setenv("DM_FPS_TARGET", "30", 1);
+    fprintf(stderr, "launcher: env DM_FPS_TARGET=30 (Frame generation, DM_FRAMEGEN=1)\n");
+}
 
 // Cloud saves: the folder chosen in the settings window (Launcher.swift CloudSavesSection, cloudSaves.folder in the app's preferences) becomes DM_SAVE_SYNC
 // (dm/host/save_sync.h), with or without the window; a DM_SAVE_SYNC the launch environment or an env file set wins. A front end may write the key too (docs/frontends.md, The cloud saves folder)
@@ -214,6 +221,7 @@ int main(int argc, char **argv) {
     if (!shown) return 0;   // Quit: no game
     if (shown == 2) saved_choices();
     fast_preset();   // after the window's or the saved choices
+    framegen_preset();
     cloud_saves_folder();
     setenv("DM_ROOT", sup, 0); setenv("DM_ROMFS", romfs, 0); setenv("DM_SAVE", save, 0); setenv("DM_TEMP", temp, 0);
     snprintf(p, sizeof p, "%s/msl", res); setenv("DM_MSL_DIR", p, 0);

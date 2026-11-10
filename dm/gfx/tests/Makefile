@@ -740,3 +740,6 @@ check_t_pool_standin: t_pool_standin
 	MTL_DEBUG_LAYER=1 DM_NVN_ENC_THREAD=0 ./t_pool_standin
 	MTL_DEBUG_LAYER=1 DM_NVN_ENC_THREAD=1 ./t_pool_standin
 	MTL_DEBUG_LAYER=1 DM_NVN_ENC_THREAD=0 DM_NVN_POOL_STANDIN=0 ./t_pool_standin
+t_framegen: t_framegen.m $(MTL_T_DEP)
+	clang $(CFLAGS) -fobjc-arc -o $@ t_framegen.m ../../host/crash.c ../../host/hle_bigstack.c t_host_stubs.c $(filter-out ../nvn/nvn_mtl.m,$(GFX)) $(FW)
+check_t_framegen: RUN_ENV =   # (switch2mac) no MTL_DEBUG_LAYER: on macOS 26.6 MetalFX's frame interpolator sends the debug encoder a selector it lacks
