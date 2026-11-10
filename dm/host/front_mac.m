@@ -244,7 +244,7 @@ uint64_t mtl_cur_frame(void); double mtl_gpu_ms(uint64_t f); int nvn_game_fps(vo
 #define OV_N 60   // graph samples: 30 s
 static int g_ov_mode = 1;   // 0 off, 1 compact, 2 detailed
 @interface DmOverlay : NSView
-@property(strong) NSTextField *label;
+@property(strong) NSTextField *label, *build;
 @end
 @implementation DmOverlay {
     float _fps[OV_N]; int _n; uint64_t _f0; double _t0, _cpu0; NSString *_lines; double _fpsNow, _gpu;
@@ -254,6 +254,7 @@ static int g_ov_mode = 1;   // 0 off, 1 compact, 2 detailed
     self.wantsLayer = YES; self.layer.backgroundColor = [NSColor colorWithWhite:0.04 alpha:0.72].CGColor; self.layer.cornerRadius = 7;
     self.layer.borderWidth = 1; self.layer.borderColor = [NSColor colorWithWhite:1 alpha:0.14].CGColor;
     self.label = [NSTextField labelWithString:@""]; self.label.maximumNumberOfLines = 0; [self addSubview:self.label];
+    self.build = [NSTextField labelWithString:@""]; [self addSubview:self.build];   // the build's name, at the right of the FPS line
     _t0 = CACurrentMediaTime(); _f0 = mtl_cur_frame(); _gpu = -1;
     __weak DmOverlay *w = self; [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *t) { (void)t; [w tick]; }];
     return self;
@@ -294,7 +295,6 @@ static void engine_name(NSString **name, NSString **version) {
     NSString *eng, *engVer; engine_name(&eng, &engVer);
     NSString *fpsText = [NSString stringWithFormat:@"FPS %.0f", _fpsNow];
     line(fpsText, fc);
-    if (eng.length) line([@"   " stringByAppendingString:eng], [NSColor colorWithWhite:0.6 alpha:1]);   // the build, dimmed, just after the FPS figure (left-aligned)
     line(gw0 > 0 ? [NSString stringWithFormat:@"\n%dx%d", gw0, gh0] : @"\n--", green);
     if (g_ov_mode == 2) {
         line([NSString stringWithFormat:@"\nGPU %@", gpu], _gpu > 16.7 ? yellow : green);
@@ -308,10 +308,14 @@ static void engine_name(NSString **name, NSString **version) {
     line(g_ov_mode == 2 ? @"\n1: hide · 2: settings" : @"\n1: more · 2: settings", grey);
     self.label.attributedStringValue = a;
     NSSize z = [self.label sizeThatFits:NSMakeSize(CGFLOAT_MAX, CGFLOAT_MAX)];
-    CGFloat gw = g_ov_mode == 2 ? 220 : 0, gh = g_ov_mode == 2 ? 74 : 0, cw = fmax(ceil(z.width), gw), m = 10;
+    self.build.attributedStringValue = [[NSAttributedString alloc] initWithString:eng attributes:@{NSFontAttributeName: mono, NSForegroundColorAttributeName: [NSColor colorWithWhite:0.6 alpha:1]}];
+    self.build.hidden = !eng.length; NSSize bz = [self.build sizeThatFits:NSMakeSize(CGFLOAT_MAX, CGFLOAT_MAX)];
+    CGFloat fw = [[NSAttributedString alloc] initWithString:[fpsText stringByAppendingString:@"   "] attributes:@{NSFontAttributeName: mono}].size.width;   // the FPS figure and a gap before the build
+    CGFloat gw = g_ov_mode == 2 ? 220 : 0, gh = g_ov_mode == 2 ? 74 : 0, cw = fmax(fmax(ceil(z.width), gw), eng.length ? ceil(fw + bz.width) : 0), m = 10;
     CGFloat w = cw + 16, h = ceil(z.height) + gh + 10; NSSize b = self.superview.bounds.size;
     self.frame = NSMakeRect(floor(b.width - w - m), floor(b.height - h - m), w, h);
     self.label.frame = NSMakeRect(8, gh + 5, ceil(z.width), ceil(z.height));
+    self.build.frame = NSMakeRect(8 + cw - ceil(bz.width), gh + 5 + ceil(z.height) - ceil(bz.height), ceil(bz.width), ceil(bz.height));   // right-aligned with the box's text edge, on the first line
     [self setNeedsDisplay:YES];
 }
 - (void)drawRect:(NSRect)d {   // detailed mode: the frame rate of the last 30 s, with lines at 30 and 60
