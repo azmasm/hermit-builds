@@ -134,6 +134,15 @@ static void saved_choices(void) {   // after the env files, before the bundle's 
     }
 }
 
+// (switch2mac) Fast mode (DM_FAST_720=1, the settings list's toggle): one switch for the two settings that trade picture for speed, the 3D views at about 1280x720 (DM_RENDER_SCALE 0.82 of
+// Ocarina of Time's 1536x864) scaled up by MetalFX in place of the game's own upscaler (DM_UPSCALER=metalfx). It replaces whatever those two rows chose; off leaves them alone
+static void fast_preset(void) {
+    const char *f = getenv("DM_FAST_720");
+    if (!f || strcmp(f, "1")) return;
+    setenv("DM_RENDER_SCALE", "0.82", 1); setenv("DM_UPSCALER", "metalfx", 1);
+    fprintf(stderr, "launcher: env DM_RENDER_SCALE=0.82 DM_UPSCALER=metalfx (Fast mode, DM_FAST_720=1)\n");
+}
+
 // Cloud saves: the folder chosen in the settings window (Launcher.swift CloudSavesSection, cloudSaves.folder in the app's preferences) becomes DM_SAVE_SYNC
 // (dm/host/save_sync.h), with or without the window; a DM_SAVE_SYNC the launch environment or an env file set wins. A front end may write the key too (docs/frontends.md, The cloud saves folder)
 static void cloud_saves_folder(void) {
@@ -204,6 +213,7 @@ int main(int argc, char **argv) {
     int shown = window ? dm_mac_launcher() : 2;
     if (!shown) return 0;   // Quit: no game
     if (shown == 2) saved_choices();
+    fast_preset();   // after the window's or the saved choices
     cloud_saves_folder();
     setenv("DM_ROOT", sup, 0); setenv("DM_ROMFS", romfs, 0); setenv("DM_SAVE", save, 0); setenv("DM_TEMP", temp, 0);
     snprintf(p, sizeof p, "%s/msl", res); setenv("DM_MSL_DIR", p, 0);
