@@ -1,0 +1,6 @@
+# Switch 2 shaders that keep their uniform reads bounded by the binding's size (dmsh_build.py BOUNDED). On macOS 26.6 (M1 Max) MTLCompilerService crashes building the task / mesh
+# pipelines of these four mesh shaders in their unbounded form (SIGBUS under AGCModule<MeshProgramKey>::compileLLVMObject), their draws are skipped and Hyrule Field's broad leaves are white
+1ba45cc5e92558a0
+65d281ec666939bc
+9ecd96cec34c7315
+ac2f3feb11427426

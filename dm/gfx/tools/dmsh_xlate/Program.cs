@@ -204,7 +204,7 @@ static class SwshXlate
                 // (switch2mac) A Switch 2 (Ampere) shader's uniform reads are not bounded by the binding's size, as before 26062f9e: Ocarina of Time reads past its bindings and relies on the data there
                 // (issue #2218: horses and the slingshot stretched to the origin), and the comparison at every read made its hot shaders about twice as long (the main scene's pixel shader
                 // a1a56cf6d62ae798: 5,085 instructions and 701 branches after the optimizer with the bound, 2,363 and 112 without; the main task shader a5288d0a6c4971fd 4,667 against 1,972)
-                var flags = TranslationFlags.MetalImageAtomics | (job["debug"] is JsonNode dbg && !(bool)dbg ? 0 : TranslationFlags.DebugMode) | ((string)job["stage"] == "cs" ? TranslationFlags.Compute : 0) | ((string)job["arch"] == "sm86" ? TranslationFlags.Ampere : TranslationFlags.MetalUniformBounds);
+                var flags = TranslationFlags.MetalImageAtomics | (job["debug"] is JsonNode dbg && !(bool)dbg ? 0 : TranslationFlags.DebugMode) | ((string)job["stage"] == "cs" ? TranslationFlags.Compute : 0) | ((string)job["arch"] == "sm86" ? TranslationFlags.Ampere | (job["bounds"] is JsonNode bn && (bool)bn ? TranslationFlags.MetalUniformBounds : 0) : TranslationFlags.MetalUniformBounds);   // (switch2mac) "bounds": a Switch 2 shader the game profile lists in uniform_bounds.tsv keeps the bounded reads (dmsh_build.py job_for)
                 var ctx = Translator.CreateContext(0, acc, new TranslationOptions(TargetLanguage.Spirv, TargetApi.Vulkan, flags));
                 bool geometry = job["geometry_topology"] != null;
                 ShaderProgram p = ctx.Translate(geometry);

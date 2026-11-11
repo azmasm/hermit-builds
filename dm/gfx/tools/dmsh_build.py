@@ -48,6 +48,10 @@ MAP = str(GAME.table('shader_map.tsv'))
 BF_WANT_FILE = str(GAME.table('bf_want.tsv'))
 BF_WANT = {line.strip() for line in open(BF_WANT_FILE) if line.strip() and not line.lstrip().startswith('#')} if os.path.exists(BF_WANT_FILE) else set()
 DUAL_WANT_FILE = str(GAME.table('dual_want.tsv'))   # pixel shaders a pipeline blends with their output 1 as the second source (see fs_dual), produced by the host (DM_NVN_DUAL_WANT)
+# (switch2mac) Switch 2 shaders that keep the bounded uniform reads the others dropped (dmsh_xlate Program.cs): one key a line in the game profile's uniform_bounds.tsv, '#' comments.
+# Ocarina of Time: Apple's GPU compiler on macOS 26.6 crashes on the unbounded form of four mesh shaders, and their plants were drawn white
+_bt = GAME.table('uniform_bounds.tsv')
+BOUNDED = {l.split()[0][:16] for l in _bt.read_text().splitlines() if l.strip() and not l.startswith('#')} if _bt.exists() else set()
 DUAL_WANT = {line.split()[0] for line in open(DUAL_WANT_FILE) if line.strip() and not line.lstrip().startswith('#')} if os.path.exists(DUAL_WANT_FILE) else set()
 XC = ['--msl', '--msl-version', '20300', '--msl-argument-buffers', '--msl-texture-buffer-native', '--msl-pad-fragment-output']
 # spirv-cross writes the translator's FMin / FMax / FClamp as fast::min / max / clamp, whose result for a NaN operand is the GPU's choice; Maxwell's FMNMX returns the other operand
@@ -987,6 +991,7 @@ def job_for(key, name, rec, w):
         tf = tf_layout(key, rec[ci:]) if stage in ('vs', 'gs') else None
         if tf: extra['tf'] = tf
     if stage == 'ps' and early_fragment_tests(rec[ci:], code): extra['early_fragment_tests'] = True
+    if key[:16] in BOUNDED: extra['bounds'] = True   # (switch2mac) this Switch 2 shader keeps its uniform reads bounded by the binding's size (uniform_bounds.tsv in the game profile)
     cp = os.path.join(w, key + '.bin'); open(cp, 'wb').write(code)
     j = {'key': key, 'stage': stage, 'code': cp, 'tex': {}, 'img': {}, 'attr': {}, 'fout': {}, 'c1': c1.hex(), **extra,
          'debug': os.environ.get('XLATE_DEBUG', '1') != '0', 'reduced': os.environ.get('XLATE_REDUCED', '1') == '1'}   # translation options (see dmsh_xlate/Program.cs); relaxed precision is on by default (GPU float last-bit error does not enter game state, whole frame −26% on the second Mac)   # c1: used by the translator to read indirect jump tables
