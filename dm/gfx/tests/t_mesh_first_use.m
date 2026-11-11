@@ -123,14 +123,16 @@ int main(void) { @autoreleasepool {
         bc.d = (nvn_texdesc){.target = NVN_TEXTURE_TARGET_2D, .format = NVN_FORMAT_RGBA8, .width = GW, .height = GH, .depth = 1, .levels = 1, .samples = 1};
         bd.d = bc.d; bd.d.format = NVN_FORMAT_DEPTH32F;
         const NVNtexture *bcs[] = {(const NVNtexture *)&bc}; const float bview[] = {0, 0, GW, GH};
-        for (int ind = 0; ind < 2; ind++) {
-            printf("mesh only, %d workgroups from %d, %s\n", N, FIRST, ind ? "indirect" : "direct");
+        for (int ind = 0; ind < 4; ind++) {   // 2, 3 (switch2mac): a direct draw opens the pass and the indirect one follows in it, with DM_NVN_MDX_AHEAD's look-ahead (2) and as before (3: g_mdx_ahead_off)
+            uint64_t splits0 = g_mdx_splits, ahead0 = g_mdx_ahead; g_mdx_ahead_off = ind == 3;
+            printf("mesh only, %d workgroups from %d, %s\n", N, FIRST, ind == 1 ? "indirect" : ind ? "a direct draw, then indirect in the same pass" : "direct");
             P(nvnCommandBufferBeginRecording)(&command);
             P(nvnCommandBufferSetRenderTargets)(&command, 1, bcs, NULL, (const NVNtexture *)&bd, NULL);
             P(nvnCommandBufferSetViewports)(&command, 0, 1, bview); P(nvnCommandBufferSetScissor)(&command, 0, 0, GW, GH);
             P(nvnCommandBufferSetDepthRange)(&command, 0, 1); P(nvnCommandBufferBindDepthStencilState)(&command, &ds);
             P(nvnCommandBufferClearDepthStencil)(&command, 1, 1, 0, 0); P(nvnCommandBufferClearColor)(&command, 0, blue, 15);
             P(nvnCommandBufferBindProgram)(&command, (const NVNprogram *)&big, 0xc3);
+            if (ind >= 2) draw(&command, FIRST, 1);
             if (ind) drawi(&command, P(nvnMemoryPoolGetBufferAddress)(&rp)); else draw(&command, FIRST, N);
             NVNcommandHandle handle = P(nvnCommandBufferEndRecording)(&command);
             P(nvnQueueSubmitCommands)(&queue, 1, &handle); P(nvnQueueFinish)(&queue);
@@ -142,6 +144,8 @@ int main(void) { @autoreleasepool {
             for (int p = 0; p < N; p++) { uint32_t wg = p < FIRST ? p + N : p; int ok = z[p] == (float)(wg + 1) / 8192.0f; good &= ok; missing += z[p] == 1.0f; }
             if (!good) { fprintf(stderr, "%d of %d pixels not drawn\n", missing, N);
                 for (int p = 0, shown = 0; p < N && shown < 6; p++) { uint32_t wg = p < FIRST ? p + N : p; if (z[p] != (float)(wg + 1) / 8192.0f) { shown++; fprintf(stderr, "  pixel %d (%d,%d): %.7f = number %.1f, expected %u\n", p, p % GW, p / GW, z[p], z[p] * 8192.0f - 1, wg); } } }
+            if (ind == 2) { CHECK(g_mdx_splits == splits0, "the indirect draw after a direct one does not end the pass"); CHECK(g_mdx_ahead == ahead0 + 1, "its copy was made before the pass opened"); }
+            if (ind == 3) { CHECK(g_mdx_splits == splits0 + 1, "with the look-ahead off the pass is ended at the indirect draw, as before"); g_mdx_ahead_off = 0; }
             CHECK(good, ind ? "an indirect draw past the mesh grid's limit draws every workgroup at its number" : "a direct draw past the mesh grid's limit draws every workgroup at its number");
             res_remove(pixels);
         }

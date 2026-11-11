@@ -13888,6 +13888,7 @@ static int mdx_find(uint64_t ind, uint64_t cnt, uint64_t *out) {   // → 1 when
     const mdx_ent *e = mdx_slot(ind, cnt); if (e->tag != g_mdx_tag) return 0;
     *out = e->out; return 1;
 }
+static int csh_ran(const uint8_t *p); static uint64_t g_mdx_ahead;   // (switch2mac) mdx_ahead's count
 static void mdx_run(const p_draw *dw, const p_draw_idx *di) {
     static id<MTLComputePipelineState> ps; static id<MTL4ArgumentTable> at; static int failed;
     if (failed) return;
@@ -13912,6 +13913,7 @@ static void mdx_run(const p_draw *dw, const p_draw_idx *di) {
         fz_cursor cur = {.p = g_exec_next, .ret_n = g_ret_n}; memcpy(cur.ret, g_ret, sizeof(*g_ret) * (size_t)g_ret_n);
         const uint8_t *p; op_hdr h; const void *a;
         for (int guard = 0; guard < 200000 && nq < QMAX && fz_next(&cur, &p, &h, &a); guard++) {
+            if (h.op == OP_DISPATCH && csh_ran(p)) continue;   // (switch2mac) already run ahead of the pass (cs_hoist_try): it writes nothing from here on
             if (h.op == OP_DISPATCH || h.op == OP_COPY_B2B || h.op == OP_CLEAR_BUF || h.op == OP_COPY_T2B) break;
             if (h.op == OP_UPDATE_UB) { uint64_t d, n; memcpy(&d, a, 8); memcpy(&n, (const uint8_t *)a + 8, 8);
                 int hit = 0; for (int k = 0; d < hi && lo < d + n && k < nq && !hit; k++) { const mdx_ent *e = q[k].e; hit = (d < e->ind + 4 * q[k].words && e->ind < d + n) || (d < e->cnt + 4 && e->cnt < d + n); }
@@ -13940,8 +13942,8 @@ static void mdx_run(const p_draw *dw, const p_draw_idx *di) {
     args_dirty_all();
     g_mdx_draws += (uint64_t)nq;
     if (!g_mdx_runs++) MLOG("indirect-count multi-draw masking: first time, %d draws (their records are copied on the GPU, zeros past the count, before the render pass)", nq);
-    else if (g_mdx_runs % 3600 == 0) MLOG("indirect-count multi-draw masking: %llu times, %llu draws (%llu encoded alone, mdx_next), render pass split %llu times; waits for the GPU-written count %llu",
-                                          (unsigned long long)g_mdx_runs, (unsigned long long)g_mdx_draws, (unsigned long long)g_mdx_fast, (unsigned long long)g_mdx_splits, (unsigned long long)g_mdi_waits);
+    else if (g_mdx_runs % 3600 == 0) MLOG("indirect-count multi-draw masking: %llu times, %llu draws (%llu encoded alone, mdx_next), render pass split %llu times, made before the pass opened %llu times; waits for the GPU-written count %llu",
+                                          (unsigned long long)g_mdx_runs, (unsigned long long)g_mdx_draws, (unsigned long long)g_mdx_fast, (unsigned long long)g_mdx_splits, (unsigned long long)g_mdx_ahead, (unsigned long long)g_mdi_waits);
 }
 // The draws of one multi-draw are recorded back to back with the same state, and only the first few are live: each one replayed right after the one before it (no op between them,
 // the same open pass) is encoded alone, without the rest of draw's work, which cost a whole draw for each masked one (about 1.5 µs on an M4 Pro, 1,100 a frame in Kamura Village)
@@ -14189,6 +14191,37 @@ static int csh_dispatch_ahead(void) {
         }
     }
     return 1;
+}
+static int csh_ran(const uint8_t *p) { for (int i = 0; i < g_csh_n; i++) if (g_csh_op[i] == p) return 1; return 0; }
+// (switch2mac) DM_NVN_MDX_AHEAD (0 = off): the masked copies of a pass's indirect-count and indirect mesh draws (mdx_run) are made before the pass opens. mdx_run makes them at the
+// first such draw it meets, and with a pass open it ends the pass there: Ocarina of Time's main scene pass and its shadow passes meet their first indirect mesh draw (the foliage)
+// hundreds of draws in, so each was cut in two, about 3 cuts a frame, each with its attachments stored and loaded again and the second half's geometry waiting for the first half's
+// pixels. At a pass's first draw this looks ahead for the first such draw of the pass: up to anything that could write a record or count (a dispatch not already run ahead, a copy,
+// a fill), a target change, or a uniform update over that draw's record or count. mdx_run then takes it and the ones after it as it would at the draw. An update or write that
+// comes later bumps g_mdx_epoch as before, and the draw then makes its copy at its own place (the old cut)
+static int g_mdx_ahead_off;   // tests: the look-ahead off for a case
+static int mdx_ahead_on(void) { if (g_mdx_ahead_off) return 0; static int v = -1; if (v < 0) { const char *e = getenv("DM_NVN_MDX_AHEAD"); v = !(e && !strcmp(e, "0")); if (!v) MLOG("DM_NVN_MDX_AHEAD=0: indirect-count draws are masked at their own place, ending the open pass"); } return v; }
+static void mdx_ahead(void) {
+    if (!g_exec_next || g_ret_n > 8 || g_mdx_range) return;
+    fz_cursor cur = {.p = g_exec_next, .ret_n = g_ret_n}; memcpy(cur.ret, g_ret, sizeof(*g_ret) * (size_t)g_ret_n);
+    const uint8_t *p; op_hdr h; const void *a; enum { UN = 96 }; uint64_t ua[UN], ub[UN]; int nu = 0;
+    for (int guard = 0; guard < 20000 && fz_next(&cur, &p, &h, &a); guard++) {
+        if (h.op == OP_DISPATCH) { if (csh_ran(p)) continue; return; }
+        if (h.op == OP_SET_RT) { if (csh_rt_same(p, a)) continue; return; }
+        if (h.op == OP_COPY_B2B || h.op == OP_CLEAR_BUF || h.op == OP_COPY_T2B || h.op == OP_TF_STATE) return;
+        if (h.op == OP_UPDATE_UB) { if (nu == UN) return; memcpy(&ua[nu], a, 8); memcpy(&ub[nu], (const uint8_t *)a + 8, 8); ub[nu] += ua[nu]; nu++; continue; }
+        if (h.op != OP_DRAW && h.op != OP_DRAW_IDX) continue;
+        p_draw dt; p_draw_idx it; const p_draw *d = h.op == OP_DRAW ? draw_rec(a, h.size, &dt) : NULL; const p_draw_idx *x = h.op == OP_DRAW_IDX ? draw_idx_rec(a, h.size, &it) : NULL;
+        uint64_t ind, cnt, len;
+        if (d && d->prim == DM_PRIM_MESH_TASKS && d->ind) { ind = cnt = d->ind; len = 16; }
+        else if (d && d->mdi_cnt && mdx_wanted(d, NULL)) { ind = d->ind; cnt = d->mdi_cnt; len = 16; }
+        else if (x && x->mdi_cnt && mdx_wanted(NULL, x)) { ind = x->ind; cnt = x->mdi_cnt; len = 20; }
+        else continue;
+        uint64_t out; if (mdx_find(ind, cnt, &out)) return;   // made already
+        for (int k = 0; k < nu; k++) if ((ua[k] < ind + len && ind < ub[k]) || (ua[k] < cnt + 4 && cnt < ub[k])) return;   // an update before it writes its record or count
+        static int once; if (!once++) MLOG("indirect-count draws are masked before their pass opens (DM_NVN_MDX_AHEAD): first case pass %llu", g_stat_pass + 1);
+        g_mdx_ahead++; mdx_run(d, x); return;
+    }
 }
 static void cs_hoist_try(NvProg *pr0, const p_draw *dw0, const p_draw_idx *di0) {
     if (!g_exec_next || g_ret_n > 8 || g_fz_checking || g_defer_replaying || g_nlc) return;
@@ -14529,6 +14562,7 @@ static void draw_(const p_draw *dw, const p_draw_idx *di) {
     if (!g_enc && tbdr_on() && !g_geo_program && !defer_has_in_p() && !g_defer_replaying && !g_fz.active && !g_fz_checking && g_exec_next) { defer_try(dw, di); if (g_defer_cur->active && g_defer_cur->in_p) return; }
     if (!g_enc && tbdr_on() && !g_fz_checking && !g_geo_program) fuse_try();   // Readable tile render pass merge is on by default; when the structure / same-pixel proof does not hold it still falls back to a normal render pass, and it is not re-entered during the CHECK redraw
     if (!g_enc && !tbdr_on() && !g_geo_program && cshoist_on()) cs_hoist_try(pr, dw, di);   // see DM_NVN_CS_HOIST
+    if (!g_enc && !tbdr_on() && !g_geo_program && mdx_ahead_on()) mdx_ahead();   // after the dispatches moved ahead: they bump g_mdx_epoch
     int need = g_enc || !tbdr_on() ? 3 : pass_ds_need(), mode = defer_q_draw ? 0 : need == 0 ? 2 : need == 2 ? 3 : need == 1 ? 4 : 0;   // 2 attach neither, 3 attach stencil only, 4 attach depth only
     int skip_d = mode != 0;
     if (!g_enc) { g_fd_dw = dw; g_fd_di = di; }

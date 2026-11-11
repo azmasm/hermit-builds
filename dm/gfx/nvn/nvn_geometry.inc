@@ -687,6 +687,7 @@ static const char *isolate_keys(void) {
 }
 static uint64_t g_iso_draws, g_iso_cuts;
 static void isolate_cut(void) { if (defer_has_active()) defer_fallback(); lc_land(); rp_flush(); rp_end(); ubd_land(); uint32_t s0 = g_seg; g_cut_copy = 1; sub_cut(); g_iso_cuts += g_seg != s0; }
+static int mdx_ahead_on(void); static void mdx_ahead(void);
 static void mesh_tasks_draw(const p_draw *dw) {
     if (!S.prog || (!dw->ind && dw->count <= 0)) return;
     __unsafe_unretained NvProg *pr = prog_get(S.prog);
@@ -700,6 +701,7 @@ static void mesh_tasks_draw(const p_draw *dw) {
         g_ubd_conflicts++; rp_end(); ubd_land();
     }
     // (oot-mac7) main's mdx conversion below replaces #1663's ixc conversion of mesh draws (09dcb627: no-task meshes in blocks of DMSH_MESH_GRID)
+    if (!dw->ind && !g_enc && mdx_ahead_on()) mdx_ahead();   // (switch2mac) a pass that begins with a direct mesh draw: its indirect mesh draws' copies are made before it opens (nvn_mtl.m mdx_ahead)
     NvProg *raster = pr->geo_lean_raster;   // the pixel stage alone
     if (!raster || raster->sh[1] != pr->sh[1] || raster->sh[0]) { raster = [NvProg new]; raster->sh[1] = pr->sh[1]; pr->geo_lean_raster = raster; }
     uint64_t ind = 0, ind_rec = 0;
