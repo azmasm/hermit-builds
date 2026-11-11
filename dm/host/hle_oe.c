@@ -295,7 +295,9 @@ HLE_FORCE("_ZN2nn2oe22SetCpuOverclockEnabledEb", "CPU overclock switch (through 
 // adds to its GPU time (main+0x549614). Star Fox keeps only "tier 0" (byte +0xa of its event 5, main+0xba69970) and renders 0.8 times smaller below it: docked, 768x432 for
 // its 1920x1080 window where tier 0 gives 960x540, its handheld size. Ocarina of Time draws 2048x1152 with tier 1 and 2560x1440 with 0. The host answered 1 docked until
 // these were found. DM_GFX_SCALE sets a tier, to see what a game does with a reduced one
-static int gfx_scale(void) { const char *e = getenv("DM_GFX_SCALE"); int v = e ? atoi(e) : 0; return v >= 0 && v <= 2 ? v : 0; }
+// (switch2mac) Unset, the host answers as before 084f5aa5: 1 docked, 0 handheld (Ocarina of Time keeps its 1536x864 3D docked); the launcher's Full docked picture row
+// (DM_FULL_DOCKED=1) sets DM_GFX_SCALE=0, the whole GPU in both modes (1920x1080 3D docked)
+static int gfx_scale(void) { const char *e = getenv("DM_GFX_SCALE"); int d = opmode() == 1; int v = e ? atoi(e) : d; return v >= 0 && v <= 2 ? v : d; }
 HLE_FORCE("_ZN2nn2oe23GetCurrentGraphicsScaleEv", "graphics scale (Switch 2, through am): 0, the whole GPU (DM_GFX_SCALE sets 1 or 2)", int, h_oe_GfxScale, void) { return gfx_scale(); }
 HLE_FORCE("_ZN2nn2oe42SetGraphicsScaleChangedNotificationEnabledEb", "graphics scale change notification (Switch 2, through am); the host's scale never changes",
           void, h_oe_GfxScaleNotify, unsigned on) { (void)on; }

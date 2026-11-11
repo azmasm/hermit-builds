@@ -156,9 +156,10 @@ int main(void) {
     CHECK(empty() && h_oe_GetFocus() == 2, "focus mode 3: an applet changes the state without a notification");
     dm_applet_leave(); CHECK(empty() && h_oe_GetFocus() == 1, "focus mode 3: back to 1 without a notification");
     // the graphics scale does not follow the operation mode: tier 0 in both modes; DM_GFX_SCALE picks a reduced tier, nonsense keeps 0
-    unsetenv("DM_GFX_SCALE"); dm_set_opmode(1); CHECK(h_oe_GfxScale() == 0, "graphics scale docked: tier 0 (the whole GPU)");
+    unsetenv("DM_GFX_SCALE"); dm_set_opmode(1); CHECK(h_oe_GfxScale() == 1, "graphics scale docked: tier 1 unless DM_GFX_SCALE (switch2mac default)");
     dm_set_opmode(0); CHECK(h_oe_GfxScale() == 0, "graphics scale handheld: tier 0");
+    setenv("DM_GFX_SCALE", "0", 1); dm_set_opmode(1); CHECK(h_oe_GfxScale() == 0, "DM_GFX_SCALE=0 docked: tier 0 (Full docked picture)"); dm_set_opmode(0);
     setenv("DM_GFX_SCALE", "2", 1); CHECK(h_oe_GfxScale() == 2, "DM_GFX_SCALE=2: tier 2");
-    setenv("DM_GFX_SCALE", "7", 1); CHECK(h_oe_GfxScale() == 0, "DM_GFX_SCALE=7: no such tier, 0"); unsetenv("DM_GFX_SCALE");
+    setenv("DM_GFX_SCALE", "7", 1); CHECK(h_oe_GfxScale() == 0, "DM_GFX_SCALE=7 handheld: no such tier, the mode's 0"); unsetenv("DM_GFX_SCALE");
     printf("== oe %d checks, %d failed ==\n", checks, fails); return fails != 0;
 }

@@ -150,6 +150,14 @@ static void framegen_preset(void) {
     fprintf(stderr, "launcher: env DM_FPS_TARGET=30 (Frame generation, DM_FRAMEGEN=1)\n");
 }
 
+// (switch2mac) Full docked picture (DM_FULL_DOCKED=1): the host reports graphics scale tier 0 docked too (DM_GFX_SCALE=0, hle_oe.c), so the game draws its whole docked size
+static void full_docked_preset(void) {
+    const char *f = getenv("DM_FULL_DOCKED");
+    if (!f || strcmp(f, "1") || getenv("DM_GFX_SCALE")) return;
+    setenv("DM_GFX_SCALE", "0", 1);
+    fprintf(stderr, "launcher: env DM_GFX_SCALE=0 (Full docked picture, DM_FULL_DOCKED=1)\n");
+}
+
 // Cloud saves: the folder chosen in the settings window (Launcher.swift CloudSavesSection, cloudSaves.folder in the app's preferences) becomes DM_SAVE_SYNC
 // (dm/host/save_sync.h), with or without the window; a DM_SAVE_SYNC the launch environment or an env file set wins. A front end may write the key too (docs/frontends.md, The cloud saves folder)
 static void cloud_saves_folder(void) {
@@ -222,6 +230,7 @@ int main(int argc, char **argv) {
     if (shown == 2) saved_choices();
     fast_preset();   // after the window's or the saved choices
     framegen_preset();
+    full_docked_preset();
     cloud_saves_folder();
     setenv("DM_ROOT", sup, 0); setenv("DM_ROMFS", romfs, 0); setenv("DM_SAVE", save, 0); setenv("DM_TEMP", temp, 0);
     snprintf(p, sizeof p, "%s/msl", res); setenv("DM_MSL_DIR", p, 0);
