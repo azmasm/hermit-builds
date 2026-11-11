@@ -67,7 +67,7 @@ static int open_run(NSString *root) {
     int in_bundle[40], in_device[40]; memset(in_bundle, 0, sizeof in_bundle); memset(in_device, 0, sizeof in_device);
     unsigned offs[] = {0, 4, 8, 16, 20, 24, 28}; int named_n = 0;
     for (unsigned o = 0; o < sizeof offs / sizeof offs[0]; o++) {
-        pso_key k = key_at(vs, fs, offs[o]); MTL4RenderPipelineDescriptor *b = pso_desc4(desc_of(&k, vs, fs), 1, !k.border);
+        pso_key k = key_at(vs, fs, offs[o]); MTL4RenderPipelineDescriptor *b = pso_desc4(desc_of(&k, vs, fs), 1);
         for (id<MTL4Archive> a in g_pw_open) if ([a newRenderPipelineStateWithDescriptor:b error:nil]) in_bundle[offs[o]]++;
         for (NSUInteger i = g_arch4.count - 1; i < g_arch4.count; i++) if ([g_arch4[i] newRenderPipelineStateWithDescriptor:b error:nil]) in_device[offs[o]]++;
         uint64_t key = arch_key(b); id<MTL4Archive> named = key ? (__bridge id<MTL4Archive>)nvn_hm_get(&g_arch_ix, &key) : nil;
@@ -84,7 +84,7 @@ static int open_run(NSString *root) {
     uint64_t built0 = g_pb_built, arch0 = g_pb_archived; NSError *err = nil;
     for (unsigned o = 0; o < sizeof offs / sizeof offs[0]; o++) {
         pso_key k = key_at(vs, fs, offs[o]); NSString *nm = [NSString stringWithFormat:@"open: a pipeline for the attribute at %u", offs[o]];
-        EXPECT(nm.UTF8String, 1, pso_build(desc_of(&k, vs, fs), !k.border, &err) != nil);
+        EXPECT(nm.UTF8String, 1, pso_build(desc_of(&k, vs, fs), &err) != nil);
     }
     EXPECT("open: 6 bases taken from the files", 6, g_pb_archived - arch0);
     EXPECT("open: only the one in no file compiled", 1, g_pb_built - built0);
@@ -126,9 +126,9 @@ int main(int argc, char **argv) { @autoreleasepool {
         EXPECT("round trip: vertex offset", off, va.offset);
         EXPECT("round trip: buffer slot", VB_SLOT(0), va.bufferIndex);
         EXPECT("round trip: stride", 32, vl.stride);
-        pbase_key ka, kb; pbase_key_of(a, 0, &ka); pbase_key_of(b, 0, &kb);
+        pbase_key ka, kb; pbase_key_of(a, &ka); pbase_key_of(b, &kb);
         EXPECT("round trip: the same base key", 0, memcmp(&ka, &kb, sizeof ka));
-        MTL4RenderPipelineDescriptor *ma = pso_desc4(a, 1, 0), *mb = pso_desc4(b, 1, 0);
+        MTL4RenderPipelineDescriptor *ma = pso_desc4(a, 1), *mb = pso_desc4(b, 1);
         EXPECT("round trip: a Metal 4 descriptor", 1, ma && mb);
         EXPECT("round trip: the colour state left open", MTLPixelFormatUnspecialized, mb.colorAttachments[0].pixelFormat);
     }
