@@ -281,6 +281,7 @@ static void engine_name(NSString **name, NSString **version) {
     NSRange dash = [s rangeOfString:@"-" options:NSBackwardsSearch]; NSString *tail = dash.location != NSNotFound ? [s substringFromIndex:dash.location + 1] : @"";
     BOOL hex = tail.length >= 7 && [tail rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdef"] invertedSet]].location == NSNotFound;
     *name = hex ? [s substringToIndex:dash.location] : s; *version = hex ? [tail substringToIndex:MIN(8u, tail.length)] : @"";
+    if ([*name isEqualToString:@"switch2mac"]) *name = @"azmasm's build";   // the id stays "switch2mac" (reports, shader lists); the name is not the app's
 }
 - (void)refreshWithCPU:(double)cpuPct {
     self.hidden = g_ov_mode == 0; if (!g_ov_mode) return;
@@ -303,7 +304,7 @@ static void engine_name(NSString **name, NSString **version) {
         double mem = footprint_gb(); line([NSString stringWithFormat:@"\nMemory %.1f GB", mem], mem > 16 ? yellow : green);
         line([NSString stringWithFormat:@"\nGame pacing %d fps", nvn_game_fps()], grey);
         NSSize px = g_layer.drawableSize; line([NSString stringWithFormat:@"\nOutput %.0fx%.0f", px.width, px.height], grey);
-        if (eng.length) line([NSString stringWithFormat:@"\nEngine %@%@%@", eng, engVer.length ? @" " : @"", engVer], grey);
+        if (engVer.length) line([NSString stringWithFormat:@"\nVersion %@", engVer], grey);
     }
     line(g_ov_mode == 2 ? @"\n1: hide · 2: settings" : @"\n1: more · 2: settings", grey);
     self.label.attributedStringValue = a;

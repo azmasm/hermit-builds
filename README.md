@@ -1,6 +1,6 @@
 # switch2mac engine
 
-The engine behind [switch2mac](https://github.com/azmasm/switch2mac)'s own builds of Nintendo Switch 2 games, starting with Mario Kart World 1.0.0: a fork of [nxnative](https://github.com/seedds/nxnative) by seedds, carried forward for Switch 2.
+The engine behind azmasm's build of Mario Kart World 1.0.0 and other Nintendo Switch 2 games in [switch2mac](https://github.com/azmasm/switch2mac): a fork of [nxnative](https://github.com/seedds/nxnative) by seedds, carried forward for Switch 2.
 
 **To play a game, use [switch2mac](https://github.com/azmasm/switch2mac)**: it fetches this engine at the version a game needs and builds the app for you. This repository is for people working on the engine itself.
 
@@ -12,7 +12,7 @@ What switch2mac added to nxnative (commit `6a787668`): NVN2 graphics on Metal, S
 
 nxnative and this engine both run the game's own code natively and draw it with Metal 4. They differ in how they turn the game's Switch 2 shaders into Metal, and in how they handle memory, so they suit different Macs.
 
-| | This engine (switch2mac) | nxnative today |
+| | This engine (azmasm's build) | nxnative today |
 |---|---|---|
 | Switch 2 shaders (NVIDIA Ampere code) | **Lowered to Switch 1 (Maxwell) code first** by Eglantine's `nx2_lower`, then translated by Ryujinx's long-tested Maxwell path into Metal | **Translated directly** by a new Ampere decoder in its Ryujinx translator: no detour, but younger code |
 | Shader output | Tuned for the Mac's GPU: uniform reads hoisted, border-colour emulation off for Mario Kart World. Uses fewer GPU registers, which matters most on M1 and M2 | Reads the Switch 2 code as written; heavier on GPU registers in some passes (Mario Kart World's reflection filters) |
