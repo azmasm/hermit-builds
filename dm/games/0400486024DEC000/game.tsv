@@ -58,3 +58,6 @@ enc_thread	on
 # The game's compute dispatches with no barrier of its between them run side by side (nvn_mtl.m dispatch_enc): on the kokiri-deck route GPU p50 15.63 -> 14.76 ms (docked,
 # Apple M4 Pro, three runs a side), the pictures alike
 dispatch_overlap	on
+# The same event again: with the encode thread the replay still began translating at the signal. Translating the parked queue before it, its commits held until the signal, in
+# Kakariko Village (headless, DM_FPS_HOLD=off, Apple M4 Pro, 2026-11-11): 55.5-57.1 -> 59.6-59.8 fps, frame p50 17.2-17.7 -> 16.5-16.6 ms, the GPU work and the draws the same
+replay_ahead	on
