@@ -1473,7 +1473,6 @@ void mtl_sub_begin(void) {
     warm_claim();
     if (g_cb) MDIE("submit re-entered");
     if (atomic_load(&g_hold_on) && g_fence - g_done >= POST_RING - 16) hold_block(0);   // a hold's fences complete only after it: the post ring (mtl_sub_commit) must not come round to one
-    if (!atomic_load(&g_sub_thread_set) || !pthread_equal(g_sub_thread, pthread_self())) nvn_dirty_own_thread();
     g_sub_thread = pthread_self(); atomic_store(&g_sub_thread_set, 1);
     atomic_store(&g_last_commit_error, 0);
     g_sub_pool = objc_autoreleasePoolPush();
