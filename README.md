@@ -1,6 +1,6 @@
-# Hermit engine
+# Hermit builds: Mario Kart World
 
-This branch (`switch2mac`) is the **Mario Kart World build** of [hermit-engine](https://github.com/azmasm/hermit-engine), whose front page lists every build. Hermit was called switch2mac; the branch keeps that name because Hermit, players' reports and the shader lists know this build by it.
+This branch (`switch2mac`) is the **Mario Kart World build** of [hermit-builds](https://github.com/azmasm/hermit-builds), whose front page lists every build. Hermit was called switch2mac; the branch keeps that name because Hermit, players' reports and the shader lists know this build by it.
 
 The engine behind azmasm's build of Mario Kart World 1.0.0 and other Nintendo Switch 2 games in [Hermit](https://github.com/azmasm/hermit): a fork of [nxnative](https://github.com/seedds/nxnative) by seedds, carried forward for Switch 2.
 
